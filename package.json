@@ -1,0 +1,16 @@
+{
+  "name": "metano",
+  "version": "1.0.0",
+  "description": "Bot Discord multifungsi: moderation, economy, leveling",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "register": "node src/scripts/registerCommands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "sql.js": "^1.14.1"
+  }
+}
