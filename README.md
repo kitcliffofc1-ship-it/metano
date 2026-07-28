@@ -20,3 +20,4 @@ Bot Discord multifungsi: moderation, economy, leveling, quest, dan auto-filter.
 
 MIT — bebas dipake, dimodif, dan disebarluaskan.
 Kredit: [@kitcliffofc1-ship-it](https://github.com/kitcliffofc1-ship-it)
+# metano
