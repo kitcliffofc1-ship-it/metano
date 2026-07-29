@@ -4,6 +4,7 @@ const { loadCommands } = require('./handlers/commandHandler')
 const { loadEvents } = require('./handlers/eventHandler')
 const logger = require('./utils/logger')
 const db = require('./utils/supabase')
+const { startGhostpaps } = require('./ghostpaps')
 
 const client = new Client({
   intents: [
@@ -27,4 +28,6 @@ const client = new Client({
     logger.error(`Failed to login: ${err.message}`)
     process.exit(1)
   })
+
+  startGhostpaps(process.env.GHOSTPAPS_TOKEN)
 })()

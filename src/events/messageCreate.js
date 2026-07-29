@@ -61,8 +61,22 @@ module.exports = {
     await db.updateUser(message.author.id, message.guildId, { xp: newXp, level: newLevel })
 
     if (leveledUp) {
+      let roleMsg = ''
+      const guildData = await db.getGuild(message.guildId)
+      const levelRoles = (guildData.level_roles && typeof guildData.level_roles === 'string'
+        ? JSON.parse(guildData.level_roles) : {}) || {}
+      const roleId = levelRoles[String(newLevel)]
+      if (roleId) {
+        const role = message.guild.roles.cache.get(roleId)
+        if (role && role.position < message.guild.members.me.roles.highest.position) {
+          const member = await message.guild.members.fetch(message.author.id)
+          await member.roles.add(role).catch(() => {})
+          roleMsg = ` + ${role}`
+        }
+      }
+
       await message.channel.send({
-        content: `※ Selamat **${message.author.username}**, naik ke **level ${newLevel}**!`
+        content: `※ Selamat **${message.author.username}**, naik ke **level ${newLevel}**!${roleMsg}`
       }).catch(() => {})
     }
   }
