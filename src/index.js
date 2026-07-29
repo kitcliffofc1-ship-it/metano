@@ -29,5 +29,26 @@ const client = new Client({
     process.exit(1)
   })
 
+  try {
+    const { REST, Routes } = require('discord.js')
+    const { readdirSync } = require('fs')
+    const { join } = require('path')
+    const config = require('./config')
+    const commands = []
+    const categories = readdirSync(join(__dirname, 'commands'))
+    for (const category of categories) {
+      const catPath = join(__dirname, 'commands', category)
+      for (const file of readdirSync(catPath).filter(f => f.endsWith('.js'))) {
+        const cmd = require(join(catPath, file))
+        commands.push(cmd.data.toJSON())
+      }
+    }
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN)
+    await rest.put(Routes.applicationCommands(config.clientId), { body: commands })
+    logger.info(`Auto-registered ${commands.length} commands`)
+  } catch (err) {
+    logger.error(`Auto-register failed: ${err.message}`)
+  }
+
   startGhostpaps(process.env.GHOSTPAPS_TOKEN)
 })()
