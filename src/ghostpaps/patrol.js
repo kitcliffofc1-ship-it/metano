@@ -30,6 +30,7 @@ const quips = [
 
 const joinTimestamps = new Map()
 const msgTimestamps = new Map()
+const spamState = new Map()
 
 function track(userId, windowMs = 5000) {
   const now = Date.now()
@@ -116,11 +117,29 @@ async function handleMessage(client, msg) {
 
   const count = track(msg.author.id)
   if (count >= 6) {
-    await msg.delete().catch(() => {})
-    const recent = await msg.channel.messages.fetch({ limit: 10 }).catch(() => [])
-    const toDelete = recent.filter(m => m.author.id === msg.author.id && m.id !== msg.id)
-    for (const m of toDelete.values()) await m.delete().catch(() => {})
-    await warn(msg.channel, 'slow down, human. this is a conversation, not a stress test. NYEH HEH HEH!')
+    const state = spamState.get(msg.author.id) || { strikes: 0, lastBurst: 0 }
+    const now = Date.now()
+    if (now - state.lastBurst > 60000) state.strikes = 0
+    state.lastBurst = now
+    state.strikes++
+    spamState.set(msg.author.id, state)
+
+    if (state.strikes === 1) {
+      await warn(msg.channel, 'slow down, human. this is a conversation, not a stress test. NYEH HEH HEH!')
+    } else if (state.strikes === 2) {
+      await msg.delete().catch(() => {})
+      const recent = await msg.channel.messages.fetch({ limit: 10 }).catch(() => [])
+      const toDelete = recent.filter(m => m.author.id === msg.author.id && m.id !== msg.id)
+      for (const m of toDelete.values()) await m.delete().catch(() => {})
+      await warn(msg.channel, 'still going, human? then it gets DELETED. one more burst and you take a nap.')
+    } else {
+      await msg.delete().catch(() => {})
+      const recent = await msg.channel.messages.fetch({ limit: 10 }).catch(() => [])
+      const toDelete = recent.filter(m => m.author.id === msg.author.id && m.id !== msg.id)
+      for (const m of toDelete.values()) await m.delete().catch(() => {})
+      await msg.member?.timeout(10 * 60 * 1000, 'ghostpaps: message spam').catch(() => {})
+      await warn(msg.channel, 'you had your chances, human. sleep it off.')
+    }
     return
   }
 
