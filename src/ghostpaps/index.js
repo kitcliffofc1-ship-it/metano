@@ -17,10 +17,11 @@ function startGhostpaps(token) {
     ],
     partials: [Partials.Message, Partials.Channel]
   })
+  client.setMaxListeners(25)
 
-  client.once('ready', () => {
+  client.once('clientReady', () => {
     logger.info(`♡ Ghostpaps is online! Logged in as ${client.user.tag} — ${client.user.username} has 0 ATK 0 DEF. Light shines straight through.`)
-    client.user.setActivity('♢ Gentayangan... 0 ATK 0 DEF', { type: 3 })
+    client.user.setActivity('♢ haunting... 0 ATK 0 DEF', { type: 3 })
     startPatrol(client)
     startAntiRaid(client)
   })
