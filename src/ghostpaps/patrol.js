@@ -52,7 +52,10 @@ async function warn(channel, text) {
 }
 
 async function ensureTrustedRole(guild) {
-  let role = guild.roles.cache.find(r => r.name === TRUSTED_ROLE)
+  const isId = /^\d{17,20}$/.test(TRUSTED_ROLE)
+  let role = isId
+    ? guild.roles.cache.get(TRUSTED_ROLE)
+    : guild.roles.cache.find(r => r.name === TRUSTED_ROLE)
   if (!role) {
     role = await guild.roles.create({
       name: TRUSTED_ROLE,
@@ -68,9 +71,9 @@ async function ensureTrustedRole(guild) {
 
 async function grantTrusted(member) {
   if (member.user.bot) return
-  if (member.roles.cache.has(TRUSTED_ROLE)) return
   const role = await ensureTrustedRole(member.guild)
   if (!role) return
+  if (member.roles.cache.has(role.id)) return
   await member.roles.add(role, 'ghostpaps: member earned trust').catch(() => {})
 }
 
