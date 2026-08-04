@@ -28,9 +28,14 @@ const quips = [
   'Your aura is weak, but your determination is... tolerable.',
 ]
 
+const TRUSTED_ROLE = '♢ trusted'
+const TRUST_MINUTES = 30
+const RAID_JOIN_WINDOW = 15
+
 const joinTimestamps = new Map()
 const msgTimestamps = new Map()
 const spamState = new Map()
+const db = require('../utils/supabase')
 
 function track(userId, windowMs = 5000) {
   const now = Date.now()
@@ -44,6 +49,43 @@ async function warn(channel, text) {
   const wText = toWingdings(text, 'lower')
   const warnMsg = await channel.send({ content: `☠❄☟ ${wText}` }).catch(() => null)
   setTimeout(() => warnMsg?.delete().catch(() => {}), 8000)
+}
+
+async function ensureTrustedRole(guild) {
+  let role = guild.roles.cache.find(r => r.name === TRUSTED_ROLE)
+  if (!role) {
+    role = await guild.roles.create({
+      name: TRUSTED_ROLE,
+      color: 0x1a1a2e,
+      hoist: false,
+      mentionable: false,
+      permissions: [],
+      reason: 'ghostpaps: trusted member marker'
+    }).catch(() => null)
+  }
+  return role
+}
+
+async function grantTrusted(member) {
+  if (member.user.bot) return
+  if (member.roles.cache.has(TRUSTED_ROLE)) return
+  const role = await ensureTrustedRole(member.guild)
+  if (!role) return
+  await member.roles.add(role, 'ghostpaps: member earned trust').catch(() => {})
+}
+
+async function sweepTrusted(guild) {
+  const role = await ensureTrustedRole(guild).catch(() => null)
+  if (!role) return
+
+  for (const member of guild.members.cache.values()) {
+    if (member.user.bot) continue
+    if (member.roles.cache.has(role.id)) continue
+    const joinedAt = member.joinedAt?.getTime() || 0
+    if (Date.now() - joinedAt > TRUST_MINUTES * 60 * 1000) {
+      await member.roles.add(role, 'ghostpaps: member earned trust').catch(() => {})
+    }
+  }
 }
 
 function startPatrol(client) {
@@ -62,6 +104,18 @@ function startPatrol(client) {
     const phrase = patrolPhrases[Math.floor(Math.random() * patrolPhrases.length)]
     client.user.setActivity(`♢ ${phrase} in #${channel.name}`, { type: 3 })
   }, 30 * 1000)
+
+  setInterval(async () => {
+    const guild = client.guilds.cache.first()
+    if (!guild) return
+    await sweepTrusted(guild)
+    for (const [id] of msgTimestamps) {
+      if (Date.now() - msgTimestamps.get(id)[msgTimestamps.get(id).length - 1] > 60000) msgTimestamps.delete(id)
+    }
+    for (const [id, state] of spamState) {
+      if (Date.now() - state.lastBurst > 60000) spamState.delete(id)
+    }
+  }, 10 * 60 * 1000)
 }
 
 async function handleBotFlood(msg) {
@@ -84,6 +138,14 @@ async function handleMessage(client, msg) {
   if (member.permissions.has('ManageMessages')) return
 
   if (msg.author.bot) return handleBotFlood(msg)
+
+  const role = await ensureTrustedRole(msg.guild).catch(() => null)
+  if (role && !member.roles.cache.has(role.id)) {
+    try {
+      const user = db.getUser(msg.author.id, msg.guild.id)
+      if (user.level >= 2) await member.roles.add(role, 'ghostpaps: proven active')
+    } catch {}
+  }
 
   const lower = msg.content.toLowerCase()
 
@@ -178,6 +240,19 @@ async function checkRaid(member) {
   const prevVerification = guild.verificationLevel
   guild.setVerificationLevel(2, 'ghostpaps anti-raid').catch(() => {})
 
+  const trustedRole = await ensureTrustedRole(guild).catch(() => null)
+  const cutoff = Date.now() - RAID_JOIN_WINDOW * 60 * 1000
+  let locked = 0
+  for (const member of guild.members.cache.values()) {
+    if (member.user.bot) continue
+    if (trustedRole && member.roles.cache.has(trustedRole.id)) continue
+    const joinedAt = member.joinedAt?.getTime() || 0
+    if (joinedAt < cutoff) continue
+    await member.timeout(15 * 60 * 1000, 'ghostpaps: raid lockdown').catch(() => {})
+    locked++
+  }
+  logger.warn(`♡ Raid lockdown — ${locked} untrusted recent joiners timed out in ${guild.name}`)
+
   setTimeout(() => {
     for (const entry of prevSlowmodes) {
       guild.channels.cache.get(entry.id)?.setRateLimitPerUser(entry.rate, 'ghostpaps anti-raid lifted').catch(() => {})
@@ -190,6 +265,11 @@ function startAntiRaid(client) {
   client.on('guildMemberAdd', member => {
     if (member.user.bot) return
     checkRaid(member)
+    setTimeout(async () => {
+      if (!member.guild) return
+      const fresh = await member.guild.members.fetch(member.id).catch(() => null)
+      if (fresh) await grantTrusted(fresh)
+    }, TRUST_MINUTES * 60 * 1000)
   })
   client.on('messageCreate', msg => handleMessage(client, msg))
   logger.info('♡ Ghostpaps anti-raid active')
